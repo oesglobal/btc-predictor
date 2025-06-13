@@ -89,10 +89,16 @@ with col2:
     st.metric(f"📊 Prediction → {signal} Signal", f"{predicted_price:,.2f} USD")
 
 # ---------------------- Charts ----------------------
-st.subheader("📈 Price Line Chart")
+# ---------------------- Charts ----------------------
+from streamlit_autorefresh import st_autorefresh
+
+# Auto-refresh every 60 seconds (60000 milliseconds)
+st_autorefresh(interval=60000, key="charts_autorefresh")
+
+st.subheader("📈 Price Line Chart (Auto-updated)")
 st.line_chart(df.set_index("Date")["Close"], use_container_width=True)
 
-st.subheader("📊 Candlestick Chart (approximate)")
+st.subheader("📊 Live Candlestick Chart (1m Interval)")
 fig = go.Figure(data=[go.Candlestick(
     x=df['Date'],
     open=df['Open'],
@@ -100,15 +106,24 @@ fig = go.Figure(data=[go.Candlestick(
     low=df['Low'],
     close=df['Close'],
     increasing_line_color='green',
-    decreasing_line_color='red'
+    decreasing_line_color='red',
+    increasing_line_width=2.5,
+    decreasing_line_width=2.5,
+    whiskerwidth=0.4
 )])
+
 fig.update_layout(
     xaxis_title="Time",
-    yaxis_title="Price (USD)",
-    height=500,
+    yaxis_title="Price (USDT)",
+    height=600,
     xaxis_rangeslider_visible=False,
-    template="plotly_dark"
+    template="plotly_white",  # More readable
+    margin=dict(l=20, r=20, t=30, b=20),
+    xaxis=dict(showgrid=True),
+    yaxis=dict(showgrid=True),
+    plot_bgcolor="white"
 )
+
 st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------- CSV Download ----------------------
