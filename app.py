@@ -37,8 +37,7 @@ if not os.path.exists(model_file) or not os.path.exists(scaler_file):
     st.stop()
 
 model = load_model(model_file)model = load_model(model_file)
-model.compile(optimizer='adam', loss='mse')  # Add this line to compile after loading
-
+model.compile(optimizer='adam', loss='mse') 
 with open(scaler_file, "rb") as f:
     scaler = pickle.load(f)
 
