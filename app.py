@@ -46,15 +46,15 @@ def get_binance_data(symbol="BTCUSDT", interval="1m", limit=100):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     response = requests.get(url)
 
-# 🔍 Debug output
-st.write("📡 Binance API Response:", response.status_code)
-st.write("🧾 Raw Text:", response.text)
+    # 🔍 Debug output
+    st.write("📡 Binance API Response:", response.status_code)
+    st.write("🧾 Raw Text:", response.text)
 
-data = response.json()
+    data = response.json()
 
-if not data or not isinstance(data, list):
-    st.error("❌ Binance API returned invalid data format.")
-    return pd.DataFrame()
+    if not data or not isinstance(data, list):
+        st.error("❌ Binance API returned invalid data format.")
+        return pd.DataFrame()
 
     df = pd.DataFrame(data, columns=[
         "Open time", "Open", "High", "Low", "Close", "Volume",
