@@ -28,32 +28,38 @@ with open(scaler_file, "rb") as f:
 
 # ---------------------- Fetch Live Data from Binance ----------------------
 @st.cache_data(ttl=15)
-def get_binance_data(symbol="BTCUSDT", interval="1m", limit=60):
-    url = f"https://api.binance.com/api/v3/klines"
+@st.cache_data(ttl=15)
+def get_binance_data():
+    url = "https://api.binance.com/api/v3/klines"
     params = {
-        "symbol": symbol,
-        "interval": interval,
-        "limit": limit
+        "symbol": "BTCUSDT",
+        "interval": "15s",
+        "limit": 100
     }
     try:
         response = requests.get(url, params=params)
         data = response.json()
+        if not isinstance(data, list) or len(data) == 0:
+            st.warning("⚠️ Binance API returned no data.")
+            return pd.DataFrame()
+
         df = pd.DataFrame(data, columns=[
-            "Open time", "Open", "High", "Low", "Close", "Volume",
-            "Close time", "Quote asset volume", "Number of trades",
+            "Open Time", "Open", "High", "Low", "Close", "Volume",
+            "Close Time", "Quote Asset Volume", "Number of Trades",
             "Taker buy base asset volume", "Taker buy quote asset volume", "Ignore"
         ])
-        df["Date"] = pd.to_datetime(df["Open time"], unit="ms")
+        df["Date"] = pd.to_datetime(df["Open Time"], unit="ms")
         df["Open"] = df["Open"].astype(float)
         df["High"] = df["High"].astype(float)
         df["Low"] = df["Low"].astype(float)
         df["Close"] = df["Close"].astype(float)
         df["Volume"] = df["Volume"].astype(float)
-        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
-        return df
+        return df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+
     except Exception as e:
-        st.error(f"🚨 Error fetching Binance data: {e}")
+        st.error(f"🚨 Exception fetching from Binance: {e}")
         return pd.DataFrame()
+
 
 # ---------------------- Load Data ----------------------
 df = get_binance_data()
