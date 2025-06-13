@@ -24,22 +24,28 @@ st.markdown(
 )
 
 @st.cache_data(ttl=60)
+@st.cache_data(ttl=60)
 def get_btc_data():
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {"vs_currency": "usd", "days": "1", "interval": "minutely"}
-    response = requests.get(url, params=params)
-    data = response.json()
-    df = pd.DataFrame(data["prices"], columns=["time", "price"])
-    df["time"] = pd.to_datetime(df["time"], unit="ms")
-    return df
 
-def predict_price(df):
-    data = df['price'].values.reshape(-1, 1)
-    scaled_data = scaler.transform(data)
-    sequence_length = 60
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
 
-    if len(scaled_data) < sequence_length:
-        return None, None
+        if "prices" not in data:
+            st.error("⚠️ CoinGecko API response missing 'prices'. Try again later.")
+            return None
+
+        df = pd.DataFrame(data["prices"], columns=["time", "price"])
+        df["time"] = pd.to_datetime(df["time"], unit="ms")
+        return df
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"🚨 Failed to fetch data from CoinGecko: {e}")
+        return None
+
 
     last_sequence = scaled_data[-sequence_length:]
     X_test = np.array([last_sequence])
