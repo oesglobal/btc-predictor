@@ -7,4 +7,5 @@ scikit-learn
 python-binance
 yfinance
 h5py
-protobuf>=4.21.6  # Use modern protobuf compatible with TensorFlow
+protobuf>=4.21.6
+plotly
