@@ -28,7 +28,8 @@ with open(scaler_file, "rb") as f:
 # ---------------------- Fetch Live Data from CoinGecko ----------------------
 @st.cache_data(ttl=60)
 @st.cache_data(ttl=60)
-def get_coingecko_data(days=1, interval="minutely"):
+@st.cache_data(ttl=60)
+def get_coingecko_data(days=1, interval="hourly"):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         "vs_currency": "usd",
@@ -59,6 +60,7 @@ def get_coingecko_data(days=1, interval="minutely"):
     except Exception as e:
         st.error(f"🚨 Exception: {e}")
         return pd.DataFrame()
+
 
     data = r.json()
     prices = data.get("prices", [])
