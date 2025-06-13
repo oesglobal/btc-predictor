@@ -98,30 +98,33 @@ st_autorefresh(interval=60000, key="charts_autorefresh")
 st.subheader("📈 Price Line Chart (Auto-updated)")
 st.line_chart(df.set_index("Date")["Close"], use_container_width=True)
 
+# ---------------------- Enhanced Candlestick Chart ----------------------
 st.subheader("📊 Live Candlestick Chart (1m Interval)")
+
 fig = go.Figure(data=[go.Candlestick(
     x=df['Date'],
     open=df['Open'],
     high=df['High'],
     low=df['Low'],
     close=df['Close'],
-    increasing_line_color='green',
+    increasing_line_color='lime',
+    increasing_fillcolor='lime',
     decreasing_line_color='red',
-    increasing_line_width=2.5,
-    decreasing_line_width=2.5,
-    whiskerwidth=0.4
+    decreasing_fillcolor='red',
+    line_width=2
 )])
 
 fig.update_layout(
     xaxis_title="Time",
     yaxis_title="Price (USDT)",
     height=600,
-    xaxis_rangeslider_visible=False,
-    template="plotly_white",  # More readable
-    margin=dict(l=20, r=20, t=30, b=20),
-    xaxis=dict(showgrid=True),
-    yaxis=dict(showgrid=True),
-    plot_bgcolor="white"
+    template="plotly_dark",
+    font=dict(size=14),
+    margin=dict(l=20, r=20, t=40, b=20),
+    xaxis=dict(showgrid=False),
+    yaxis=dict(showgrid=True, gridcolor='gray'),
+    plot_bgcolor='black',
+    paper_bgcolor='black'
 )
 
 st.plotly_chart(fig, use_container_width=True)
