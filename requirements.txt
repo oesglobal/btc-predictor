@@ -1,0 +1,10 @@
+streamlit
+tensorflow
+pandas
+numpy
+requests
+scikit-learn
+python-binance
+h5py
+protobuf<4
+
