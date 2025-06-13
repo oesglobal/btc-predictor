@@ -59,7 +59,6 @@ def get_coingecko_data(days=2):  # ≥2 to get hourly data without needing `inte
     except Exception as e:
         st.error(f"🚨 Exception: {e}")
         return pd.DataFrame()
-df = get_coingecko_data(days=2)
 
         df = pd.DataFrame(prices, columns=["timestamp", "price"])
         df["Date"] = pd.to_datetime(df["timestamp"], unit="ms")
