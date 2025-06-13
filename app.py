@@ -1,93 +1,112 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-import datetime
 import requests
-import joblib
-from tensorflow.keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
+import plotly.graph_objs as go
+from keras.models import load_model
+import pickle
+from datetime import datetime
+import time
 
-# Set page config
-st.set_page_config(page_title="BTC Price & Prediction", layout="wide", initial_sidebar_state="collapsed")
-
-# Load LSTM model and scaler
+# Load model and scaler
 model = load_model('btc_model.h5')
-scaler = joblib.load('btc_scaler.pkl')
+with open('btc_scaler.pkl', 'rb') as f:
+    scaler = pickle.load(f)
 
-# Fetch historical data from CoinGecko
-@st.cache_data(ttl=300)
-def get_btc_data():
-    url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart'
-    params = {'vs_currency': 'usd', 'days': '2', 'interval': 'minute'}
-    res = requests.get(url, params=params)
-    data = res.json()
-    df = pd.DataFrame(data['prices'], columns=['time', 'price'])
-    df['time'] = pd.to_datetime(df['time'], unit='ms')
-    return df
+st.set_page_config(page_title="BTC Predictor", layout="wide")
 
-# Predict future price using LSTM
-def predict_price(prices):
-    sequence_length = 60
-    data = scaler.transform(prices[-sequence_length:].reshape(-1, 1))
-    X = np.reshape(data, (1, sequence_length, 1))
-    predicted = model.predict(X)
-    return scaler.inverse_transform(predicted)[0][0]
-
-# Buy/Sell logic
-def get_signal(current, predicted):
-    if predicted > current * 1.001:
-        return "BUY"
-    elif predicted < current * 0.999:
-        return "SELL"
-    else:
-        return "HOLD"
-
-# Main
-st.markdown("<h1 style='text-align: center; color: #99f9f9;'>📈 Bitcoin (BTC) Live Price & Prediction</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #99f9f9;'>Powered by OESLink using CoinGecko API</p>", unsafe_allow_html=True)
-
-df = get_btc_data()
-current_price = df['price'].iloc[-1]
-predicted_price = predict_price(df['price'].values)
-
-signal = get_signal(current_price, predicted_price)
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("💰 Current BTC Price", f"${current_price:,.2f}")
-with col2:
-    st.metric("📊 Prediction → Signal", signal)
-with col3:
-    st.metric("🔮 Predicted Price", f"${predicted_price:,.2f}")
-
-# Candlestick chart
-fig = go.Figure()
-
-resampled = df.set_index("time").resample('1min').ohlc()['price'].dropna()
-fig.add_trace(go.Candlestick(
-    x=resampled.index,
-    open=resampled['open'],
-    high=resampled['high'],
-    low=resampled['low'],
-    close=resampled['close'],
-    increasing_line_color='lime',
-    decreasing_line_color='red',
-    name='BTC'
-))
-
-fig.update_layout(
-    title='BTC Live Candlestick Chart (1m)',
-    xaxis=dict(
-        title=dict(text="Time", font=dict(color="#99f9f9", size=16))
-    ),
-    yaxis=dict(
-        title=dict(text="Price (USD)", font=dict(color="#99f9f9", size=16))
-    ),
-    plot_bgcolor="#000000",
-    paper_bgcolor="#000000",
-    font=dict(color="#99f9f9"),
-    height=600
+st.markdown(
+    """
+    <h1 style='text-align: center; color: #99f9f9;'>📈 Bitcoin (BTC) Live Price & Prediction</h1>
+    <h4 style='text-align: center; color: #99f9f9;'>Powered by OESLink using CoinGecko API</h4>
+    """,
+    unsafe_allow_html=True
 )
 
-st.plotly_chart(fig, use_container_width=True)
+@st.cache_data(ttl=60)
+def get_btc_data():
+    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
+    params = {"vs_currency": "usd", "days": "1", "interval": "minutely"}
+    response = requests.get(url, params=params)
+    data = response.json()
+    df = pd.DataFrame(data["prices"], columns=["time", "price"])
+    df["time"] = pd.to_datetime(df["time"], unit="ms")
+    return df
+
+def predict_price(df):
+    data = df['price'].values.reshape(-1, 1)
+    scaled_data = scaler.transform(data)
+    sequence_length = 60
+
+    if len(scaled_data) < sequence_length:
+        return None, None
+
+    last_sequence = scaled_data[-sequence_length:]
+    X_test = np.array([last_sequence])
+    predicted_price = model.predict(X_test)
+    predicted_price = scaler.inverse_transform(predicted_price)
+    return float(df['price'].iloc[-1]), float(predicted_price[0][0])
+
+df = get_btc_data()
+
+if df is not None and len(df) >= 60:
+    current_price, predicted_price = predict_price(df)
+
+    signal = "BUY" if predicted_price > current_price else "SELL"
+    signal_color = "#00FF00" if signal == "BUY" else "#FF3333"
+
+    st.markdown(f"""
+    <div style='color: #99f9f9; font-size: 20px;'>
+    💰 <b>Current BTC Price</b><br>
+    <span style='font-size: 30px;'>{current_price:,.2f} USD</span><br><br>
+    📊 <b>Prediction →</b> <span style='color: {signal_color}; font-weight: bold;'>{signal} Signal</span><br>
+    Predicted Price: {predicted_price:,.2f} USD
+    </div><br>
+    """, unsafe_allow_html=True)
+
+    # Price Line Chart
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(x=df["time"], y=df["price"], mode='lines', name='Price'))
+    fig1.update_layout(
+        title='📈 Price Line Chart',
+        xaxis_title='Time',
+        yaxis_title='USD',
+        template='plotly_dark',
+        plot_bgcolor='black',
+        paper_bgcolor='black',
+        font=dict(color='#99f9f9')
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # Live Candlestick Chart
+    df_candle = df.copy()
+    df_candle.set_index("time", inplace=True)
+    df_candle["open"] = df_candle["price"].shift(1)
+    df_candle["high"] = df_candle["price"].rolling(window=3).max()
+    df_candle["low"] = df_candle["price"].rolling(window=3).min()
+    df_candle["close"] = df_candle["price"]
+
+    fig2 = go.Figure(data=[go.Candlestick(
+        x=df_candle.index,
+        open=df_candle["open"],
+        high=df_candle["high"],
+        low=df_candle["low"],
+        close=df_candle["close"],
+        increasing_line_color='lime', decreasing_line_color='red'
+    )])
+
+    fig2.update_layout(
+        title='📊 Live Candlestick Chart (1m Interval)',
+        xaxis_title='Time',
+        yaxis_title='USD',
+        template='plotly_dark',
+        plot_bgcolor='black',
+        paper_bgcolor='black',
+        font=dict(color='#99f9f9')
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.markdown("<br><hr><div style='text-align:center; color:#99f9f9;'>✅ Using CoinGecko for public data access. Next step: Deploy to <b>predict.oeslink.one</b></div>", unsafe_allow_html=True)
+
+else:
+    st.warning("Not enough data to predict. Please wait for more data or check your internet connection.")
