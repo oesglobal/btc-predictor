@@ -27,12 +27,13 @@ with open(scaler_file, "rb") as f:
 
 # ---------------------- Fetch Live Data from CoinGecko ----------------------
 @st.cache_data(ttl=60)
-def get_coingecko_data(days=1):
+@st.cache_data(ttl=60)
+def get_coingecko_data(days=2):  # ≥2 to get hourly data without needing `interval`
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         "vs_currency": "usd",
-        "days": days,
-        "interval": "hourly"  # Only 'hourly' or 'daily' are allowed
+        "days": days
+        # Do NOT include 'interval' parameter!
     }
     try:
         response = requests.get(url, params=params)
@@ -40,13 +41,26 @@ def get_coingecko_data(days=1):
             st.error(f"❌ CoinGecko API error {response.status_code}")
             st.text(f"Raw response: {response.text}")
             return pd.DataFrame()
-        
+
         data = response.json()
         prices = data.get("prices", [])
         if not prices or not isinstance(prices, list):
             st.warning("⚠️ CoinGecko API returned invalid format.")
             return pd.DataFrame()
-        
+
+        df = pd.DataFrame(prices, columns=["timestamp", "price"])
+        df["Date"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df["Close"] = df["price"]
+        df["Open"] = df["High"] = df["Low"] = df["Close"]
+        df["Volume"] = 0.0
+        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+        return df
+
+    except Exception as e:
+        st.error(f"🚨 Exception: {e}")
+        return pd.DataFrame()
+df = get_coingecko_data(days=2)
+
         df = pd.DataFrame(prices, columns=["timestamp", "price"])
         df["Date"] = pd.to_datetime(df["timestamp"], unit="ms")
         df["Close"] = df["price"]
