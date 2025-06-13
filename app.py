@@ -27,14 +27,12 @@ with open(scaler_file, "rb") as f:
 
 # ---------------------- Fetch Live Data from CoinGecko ----------------------
 @st.cache_data(ttl=60)
-@st.cache_data(ttl=60)
-@st.cache_data(ttl=60)
-def get_coingecko_data(days=1, interval="hourly"):
+def get_coingecko_data(days=1):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         "vs_currency": "usd",
         "days": days,
-        "interval": interval
+        "interval": "hourly"  # Only 'hourly' or 'daily' are allowed
     }
     try:
         response = requests.get(url, params=params)
@@ -61,18 +59,8 @@ def get_coingecko_data(days=1, interval="hourly"):
         st.error(f"🚨 Exception: {e}")
         return pd.DataFrame()
 
-
-    data = r.json()
-    prices = data.get("prices", [])
-    df = pd.DataFrame(prices, columns=["timestamp", "price"])
-    df["Date"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df["Close"] = df["price"]
-    df["Open"] = df["High"] = df["Low"] = df["Close"]  # Approximation
-    df["Volume"] = 0.0  # Not provided by CoinGecko free endpoint
-    df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
-    return df
-
-df = get_coingecko_data(days=1, interval="minutely")
+# ---------------------- Load Data ----------------------
+df = get_coingecko_data(days=1)
 
 if df.empty or "Close" not in df.columns:
     st.error("⚠️ CoinGecko API returned no data or missing 'Close' column.")
