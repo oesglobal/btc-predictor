@@ -2,117 +2,118 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-import plotly.graph_objs as go
-from keras.models import load_model
 import pickle
-from datetime import datetime
-import time
+import os
+import plotly.graph_objects as go
+from tensorflow.keras.models import load_model
+from datetime import datetime, timedelta
 
-# Load model and scaler
-model = load_model('btc_model.h5')
-with open('btc_scaler.pkl', 'rb') as f:
+# ---------------------- Config ----------------------
+st.set_page_config(page_title="Bitcoin Predictor", layout="wide")
+st.title("📈 Bitcoin (BTC) Live Price & Prediction")
+st.caption("Powered by **OESLink** using CoinGecko API")
+
+# ---------------------- Load Model & Scaler ----------------------
+model_file = "btc_model.h5"
+scaler_file = "btc_scaler.pkl"
+
+if not os.path.exists(model_file) or not os.path.exists(scaler_file):
+    st.error("❌ Model or scaler file not found.")
+    st.stop()
+
+model = load_model(model_file)
+with open(scaler_file, "rb") as f:
     scaler = pickle.load(f)
 
-st.set_page_config(page_title="BTC Predictor", layout="wide")
-
-st.markdown(
-    """
-    <h1 style='text-align: center; color: #99f9f9;'>📈 Bitcoin (BTC) Live Price & Prediction</h1>
-    <h4 style='text-align: center; color: #99f9f9;'>Powered by OESLink using CoinGecko API</h4>
-    """,
-    unsafe_allow_html=True
-)
-
+# ---------------------- Fetch Live Data from CoinGecko ----------------------
 @st.cache_data(ttl=60)
-@st.cache_data(ttl=60)
-def get_btc_data():
+def get_coingecko_data(days=1):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
-    params = {"vs_currency": "usd", "days": "1", "interval": "minutely"}
-
+    params = {
+        "vs_currency": "usd",
+        "days": days,
+        "interval": "hourly"  # Only 'hourly' or 'daily' are allowed
+    }
     try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            st.error(f"❌ CoinGecko API error {response.status_code}")
+            st.text(f"Raw response: {response.text}")
+            return pd.DataFrame()
+        
         data = response.json()
-
-        if "prices" not in data:
-            st.error("⚠️ CoinGecko API response missing 'prices'. Try again later.")
-            return None
-
-        df = pd.DataFrame(data["prices"], columns=["time", "price"])
-        df["time"] = pd.to_datetime(df["time"], unit="ms")
+        prices = data.get("prices", [])
+        if not prices or not isinstance(prices, list):
+            st.warning("⚠️ CoinGecko API returned invalid format.")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(prices, columns=["timestamp", "price"])
+        df["Date"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df["Close"] = df["price"]
+        df["Open"] = df["High"] = df["Low"] = df["Close"]
+        df["Volume"] = 0.0
+        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
         return df
 
-    except requests.exceptions.RequestException as e:
-        st.error(f"🚨 Failed to fetch data from CoinGecko: {e}")
-        return None
+    except Exception as e:
+        st.error(f"🚨 Exception: {e}")
+        return pd.DataFrame()
 
+# ---------------------- Load Data ----------------------
+df = get_coingecko_data(days=1)
 
-    last_sequence = scaled_data[-sequence_length:]
-    X_test = np.array([last_sequence])
-    predicted_price = model.predict(X_test)
-    predicted_price = scaler.inverse_transform(predicted_price)
-    return float(df['price'].iloc[-1]), float(predicted_price[0][0])
+if df.empty or "Close" not in df.columns:
+    st.error("⚠️ CoinGecko API returned no data or missing 'Close' column.")
+    st.stop()
 
-df = get_btc_data()
+# ---------------------- Predict Next Price ----------------------
+def predict_next(df, model, scaler, sequence_length=60):
+    df_scaled = scaler.transform(df[["Close"]])
+    last_sequence = df_scaled[-sequence_length:]
+    X_input = np.reshape(last_sequence, (1, sequence_length, 1))
+    prediction = model.predict(X_input)
+    predicted_price = scaler.inverse_transform(prediction)[0][0]
+    return predicted_price
 
-if df is not None and len(df) >= 60:
-    current_price, predicted_price = predict_price(df)
+# ---------------------- Signal Logic ----------------------
+current_price = df["Close"].iloc[-1]
+predicted_price = predict_next(df, model, scaler)
+signal = "BUY" if predicted_price > current_price else "SELL"
 
-    signal = "BUY" if predicted_price > current_price else "SELL"
-    signal_color = "#00FF00" if signal == "BUY" else "#FF3333"
+# ---------------------- Display ----------------------
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("💰 Current BTC Price", f"{current_price:,.2f} USD")
+with col2:
+    st.metric(f"📊 Prediction → {signal} Signal", f"{predicted_price:,.2f} USD")
 
-    st.markdown(f"""
-    <div style='color: #99f9f9; font-size: 20px;'>
-    💰 <b>Current BTC Price</b><br>
-    <span style='font-size: 30px;'>{current_price:,.2f} USD</span><br><br>
-    📊 <b>Prediction →</b> <span style='color: {signal_color}; font-weight: bold;'>{signal} Signal</span><br>
-    Predicted Price: {predicted_price:,.2f} USD
-    </div><br>
-    """, unsafe_allow_html=True)
+# ---------------------- Charts ----------------------
+st.subheader("📈 Price Line Chart")
+st.line_chart(df.set_index("Date")["Close"], use_container_width=True)
 
-    # Price Line Chart
-    fig1 = go.Figure()
-    fig1.add_trace(go.Scatter(x=df["time"], y=df["price"], mode='lines', name='Price'))
-    fig1.update_layout(
-        title='📈 Price Line Chart',
-        xaxis_title='Time',
-        yaxis_title='USD',
-        template='plotly_dark',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='#99f9f9')
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+st.subheader("📊 Candlestick Chart (approximate)")
+fig = go.Figure(data=[go.Candlestick(
+    x=df['Date'],
+    open=df['Open'],
+    high=df['High'],
+    low=df['Low'],
+    close=df['Close'],
+    increasing_line_color='green',
+    decreasing_line_color='red'
+)])
+fig.update_layout(
+    xaxis_title="Time",
+    yaxis_title="Price (USD)",
+    height=500,
+    xaxis_rangeslider_visible=False,
+    template="plotly_dark"
+)
+st.plotly_chart(fig, use_container_width=True)
 
-    # Live Candlestick Chart
-    df_candle = df.copy()
-    df_candle.set_index("time", inplace=True)
-    df_candle["open"] = df_candle["price"].shift(1)
-    df_candle["high"] = df_candle["price"].rolling(window=3).max()
-    df_candle["low"] = df_candle["price"].rolling(window=3).min()
-    df_candle["close"] = df_candle["price"]
+# ---------------------- CSV Download ----------------------
+csv = df.to_csv(index=False).encode("utf-8")
+st.download_button("📥 Download CSV", csv, "btc_price_data.csv", "text/csv")
 
-    fig2 = go.Figure(data=[go.Candlestick(
-        x=df_candle.index,
-        open=df_candle["open"],
-        high=df_candle["high"],
-        low=df_candle["low"],
-        close=df_candle["close"],
-        increasing_line_color='lime', decreasing_line_color='red'
-    )])
-
-    fig2.update_layout(
-        title='📊 Live Candlestick Chart (1m Interval)',
-        xaxis_title='Time',
-        yaxis_title='USD',
-        template='plotly_dark',
-        plot_bgcolor='black',
-        paper_bgcolor='black',
-        font=dict(color='#99f9f9')
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-
-    st.markdown("<br><hr><div style='text-align:center; color:#99f9f9;'>✅ Using CoinGecko for public data access. Next step: Deploy to <b>predict.oeslink.one</b></div>", unsafe_allow_html=True)
-
-else:
-    st.warning("Not enough data to predict. Please wait for more data or check your internet connection.")
+# ---------------------- Footer ----------------------
+st.markdown("---")
+st.markdown("✅ Using [CoinGecko](https://www.coingecko.com/) for public data access.\nNext step: Deploy to `predict.oeslink.one`")
