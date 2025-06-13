@@ -99,6 +99,11 @@ st.subheader("📈 Price Line Chart (Auto-updated)")
 st.line_chart(df.set_index("Date")["Close"], use_container_width=True)
 
 # ---------------------- Enhanced Candlestick Chart ----------------------
+from streamlit_autorefresh import st_autorefresh
+
+# Auto-refresh every 15 seconds (15000 milliseconds)
+count = st_autorefresh(interval=15000, limit=None, key="candlestick_refresh")
+
 st.subheader("📊 Live Candlestick Chart (1m Interval)")
 
 fig = go.Figure(data=[go.Candlestick(
@@ -109,13 +114,13 @@ fig = go.Figure(data=[go.Candlestick(
     close=df['Close'],
     increasing_line_color='#00ff00',
     decreasing_line_color='#ff5555',
-    line=dict(width=2)
+    line_width=2
 )])
 
 fig.update_layout(
     plot_bgcolor='#000000',
     paper_bgcolor='#000000',
-    font=dict(color='#99f9f9'),
+    font_color='#99f9f9',
     xaxis=dict(
         title='Time',
         titlefont=dict(color='#99f9f9'),
