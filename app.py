@@ -107,27 +107,32 @@ fig = go.Figure(data=[go.Candlestick(
     high=df['High'],
     low=df['Low'],
     close=df['Close'],
-    increasing_line_color='lime',
-    increasing_fillcolor='lime',
-    decreasing_line_color='red',
-    decreasing_fillcolor='red',
-    line_width=2
+    increasing_line_color='#00ff00',
+    decreasing_line_color='#ff5555',
+    line=dict(width=2)
 )])
 
 fig.update_layout(
-    xaxis_title="Time",
-    yaxis_title="Price (USDT)",
+    plot_bgcolor='#000000',
+    paper_bgcolor='#000000',
+    font=dict(color='#99f9f9'),
+    xaxis=dict(
+        title='Time',
+        titlefont=dict(color='#99f9f9'),
+        tickfont=dict(color='#99f9f9'),
+        rangeslider=dict(visible=False)
+    ),
+    yaxis=dict(
+        title='Price (USDT)',
+        titlefont=dict(color='#99f9f9'),
+        tickfont=dict(color='#99f9f9')
+    ),
     height=600,
-    template="plotly_dark",
-    font=dict(size=14),
-    margin=dict(l=20, r=20, t=40, b=20),
-    xaxis=dict(showgrid=False),
-    yaxis=dict(showgrid=True, gridcolor='gray'),
-    plot_bgcolor='black',
-    paper_bgcolor='black'
+    margin=dict(l=20, r=20, t=30, b=20)
 )
 
 st.plotly_chart(fig, use_container_width=True)
+
 
 # ---------------------- CSV Download ----------------------
 csv = df.to_csv(index=False).encode("utf-8")
