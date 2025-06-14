@@ -11,7 +11,7 @@ from datetime import datetime
 # Config
 st.set_page_config(page_title="Bitcoin Predictor", layout="wide")
 st.title("📈 Bitcoin (BTC) Live Price & Prediction")
-st.caption("Powered by **OESLink** using CoinGecko API – updates every 15 seconds")
+st.caption("Powered by **OESLink** using CoinGecko API – live updates every 15 seconds")
 
 # Load model & scaler
 model_file = "btc_model.h5"
@@ -29,7 +29,7 @@ with open(scaler_file, "rb") as f:
 @st.cache_data(ttl=15)  # Refresh every 15 seconds
 def get_btc_data():
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
-    params = {"vs_currency": "usd", "days": "1"}
+    params = {"vs_currency": "usd", "days": "1", "interval": "minutely"}
     try:
         response = requests.get(url, params=params)
         data = response.json()
@@ -72,13 +72,30 @@ col1, col2 = st.columns(2)
 col1.metric("💰 Current BTC Price", f"{current_price:,.2f} USD")
 col2.metric(f"📊 Prediction → {signal} Signal", f"{predicted_price:,.2f} USD")
 
-# Line chart
-st.subheader("📈 Price Line Chart (Live)")
-st.line_chart(df.set_index("Date")["Close"])
+# Price Line Chart
+st.subheader("📈 BTC Price Trend (Live)")
+line_fig = go.Figure()
+line_fig.add_trace(go.Scatter(
+    x=df["Date"],
+    y=df["Close"],
+    mode='lines+markers',
+    line=dict(color='orange', width=3),
+    marker=dict(size=3),
+    name='Close Price'
+))
+line_fig.update_layout(
+    xaxis_title="Time",
+    yaxis_title="Price (USD)",
+    height=400,
+    template="plotly_dark",
+    margin=dict(l=10, r=10, t=20, b=20),
+    showlegend=False
+)
+st.plotly_chart(line_fig, use_container_width=True)
 
-# Candlestick chart
-st.subheader("📊 Candlestick Chart (Live – thicker bars)")
-fig = go.Figure(data=[go.Candlestick(
+# Candlestick Chart
+st.subheader("📊 Candlestick Chart (Thicker & Live)")
+candle_fig = go.Figure(data=[go.Candlestick(
     x=df["Date"],
     open=df["Open"],
     high=df["High"],
@@ -86,23 +103,24 @@ fig = go.Figure(data=[go.Candlestick(
     close=df["Close"],
     increasing_line_color='lime',
     decreasing_line_color='red',
-    increasing_line_width=3,
-    decreasing_line_width=3
+    increasing_line_width=4,  # Thicker for visibility
+    decreasing_line_width=4,
+    whiskerwidth=0.4  # makes candle body more prominent
 )])
-fig.update_layout(
+candle_fig.update_layout(
     xaxis_title="Time",
     yaxis_title="Price (USD)",
     height=550,
     xaxis_rangeslider_visible=False,
     template="plotly_dark",
-    margin=dict(l=10, r=10, t=30, b=10)
+    margin=dict(l=10, r=10, t=20, b=10)
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(candle_fig, use_container_width=True)
 
-# CSV download
+# CSV Download
 csv = df.to_csv(index=False).encode("utf-8")
-st.download_button("📥 Download CSV", csv, "btc_price_data.csv", "text/csv")
+st.download_button("📥 Download BTC CSV", csv, "btc_price_data.csv", "text/csv")
 
 # Footer
 st.markdown("---")
-st.markdown("✅ Using [CoinGecko](https://www.coingecko.com/) for public market data.\n🔁 *This dashboard auto-refreshes every **15 seconds** for live updates.*\nNext step: Deploy to `https://predict.oeslink.one`")
+st.markdown("✅ Data from [CoinGecko](https://www.coingecko.com/) – auto-updates every **15 seconds**.\n🔁 To see live price movement, leave this page open.\nDeploy to: **`https://predict.oeslink.one`**")
