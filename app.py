@@ -27,26 +27,40 @@ with open(scaler_file, "rb") as f:
 
 # Fetch BTC data from CoinGecko
 @st.cache_data(ttl=15)  # Refresh every 15 seconds
+@st.cache_data(ttl=15)
 def get_btc_data():
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {"vs_currency": "usd", "days": "1", "interval": "minutely"}
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
         data = response.json()
+
         prices = data.get("prices", [])
         if not prices:
             return pd.DataFrame()
 
         df = pd.DataFrame(prices, columns=["time", "price"])
         df["Date"] = pd.to_datetime(df["time"], unit="ms")
-        df["Close"] = df["price"]
-        df["Open"] = df["High"] = df["Low"] = df["Close"]
-        df["Volume"] = 0.0
-        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
-        return df
+        df.set_index("Date", inplace=True)
 
+        # ⏳ Resample to 5-minute OHLC
+        ohlc = df["price"].resample("5T").ohlc().dropna()
+        if ohlc.empty or "close" not in ohlc.columns:
+            return pd.DataFrame()
+
+        ohlc["Volume"] = 0.0
+        ohlc.reset_index(inplace=True)
+        ohlc.rename(columns={
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close"
+        }, inplace=True)
+
+        return ohlc[["Date", "Open", "High", "Low", "Close", "Volume"]]
     except Exception as e:
-        st.error(f"🚨 Failed to fetch data from CoinGecko: {e}")
+        st.error(f"🚨 Failed to fetch BTC data: {e}")
         return pd.DataFrame()
 
 # Load data
@@ -94,28 +108,33 @@ line_fig.update_layout(
 st.plotly_chart(line_fig, use_container_width=True)
 
 # Candlestick Chart
-st.subheader("📊 Candlestick Chart (Thicker & Live)")
-candle_fig = go.Figure(data=[go.Candlestick(
-    x=df["Date"],
-    open=df["Open"],
-    high=df["High"],
-    low=df["Low"],
-    close=df["Close"],
-    increasing_line_color='lime',
-    decreasing_line_color='red',
-    increasing_line_width=4,  # Thicker for visibility
-    decreasing_line_width=4,
-    whiskerwidth=0.4  # makes candle body more prominent
-)])
-candle_fig.update_layout(
-    xaxis_title="Time",
-    yaxis_title="Price (USD)",
-    height=550,
-    xaxis_rangeslider_visible=False,
-    template="plotly_dark",
-    margin=dict(l=10, r=10, t=20, b=10)
-)
-st.plotly_chart(candle_fig, use_container_width=True)
+btc_df = get_btc_data()
+
+if btc_df.empty:
+    st.warning("⚠️ Live BTC data is unavailable or missing.")
+else:
+    st.subheader("📊 Candlestick Chart (5-min candles – more visible)")
+    fig = go.Figure(data=[go.Candlestick(
+        x=btc_df["Date"],
+        open=btc_df["Open"],
+        high=btc_df["High"],
+        low=btc_df["Low"],
+        close=btc_df["Close"],
+        increasing_line_color='lime',
+        decreasing_line_color='red',
+        increasing_line_width=5,
+        decreasing_line_width=5,
+        whiskerwidth=0.7
+    )])
+    fig.update_layout(
+        xaxis_title="Time",
+        yaxis_title="Price (USD)",
+        height=550,
+        xaxis_rangeslider_visible=False,
+        template="plotly_dark",
+        margin=dict(l=10, r=10, t=20, b=10)
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # CSV Download
 csv = df.to_csv(index=False).encode("utf-8")
