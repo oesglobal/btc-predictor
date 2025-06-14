@@ -10,7 +10,11 @@ st.caption("Powered by **OESLink** using Binance API")
 
 # ---------------------- Fetch Live Data from Binance ----------------------
 @st.cache_data(ttl=15)
-def get_binance_data():
+# Replace this:
+# df = get_binance_data()
+# With this:
+df = get_coingecko_data()
+():
     url = "https://api.binance.com/api/v3/klines"
     params = {
         "symbol": "BTCUSDT",
